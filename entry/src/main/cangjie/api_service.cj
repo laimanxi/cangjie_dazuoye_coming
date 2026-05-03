@@ -6,6 +6,12 @@ import ohos.base.*
 import ohos.business_exception.BusinessException
 import std.collection.*
 import std.convert.*
+import std.regex.*
+import std.fs.*
+
+let IMAGE_FORGE_HISTORY_KEY: String = "imageForgeHistoryLines"
+/// 创作页「上传图片」演示用可加载的远程图（真机需网络）；后续可替换为相册选择结果。
+let IMAGE_FORGE_DEMO_EDIT_URL: String = "https://picsum.photos/seed/imageforge-edit/1024/768"
 
 let API_BASE_URL: String = "https://ptp.matrixlabs.cn" // cjlint-ignore !G.OTH.03 deployed BFF endpoint
 let AUTH_API_PATH: String = "/api/auth"
@@ -14,6 +20,32 @@ func runOnMainThread(task: () -> Unit): Unit {
     launch {
         task()
     }
+}
+
+func imageForgeHistoryAppend(summary: String): Unit {
+    let flat = Regex("\r|\n").replaceAll(summary, " ")
+    let cleaned = Regex("\\s+").replaceAll(flat, " ").trimAscii()
+    if (cleaned.isEmpty()) {
+        return
+    }
+    var line = cleaned
+    if (line.size > 220) {
+        line = line[0..220]
+    }
+    let prev = if (AppStorage.has(IMAGE_FORGE_HISTORY_KEY)) {
+        match (AppStorage.get<String>(IMAGE_FORGE_HISTORY_KEY)) {
+            case Some(s) => s
+            case None => ""
+        }
+    } else {
+        ""
+    }
+    let next = if (prev.isEmpty()) {
+        line
+    } else {
+        line + "\n" + prev
+    }
+    AppStorage.setOrCreate(IMAGE_FORGE_HISTORY_KEY, next)
 }
 
 enum EditTemplate {
@@ -219,6 +251,169 @@ func apiGenerateImage(
     )
 }
 
+/// SSE `/api/generate-stream`：服务端推送 progress，完成时带回 image 等字段（与 API 文档一致）
+func apiGenerateImageStream(
+    accessCode: String,
+    prompt: String,
+    width: Int64,
+    height: Int64,
+    steps: Int64,
+    cfg: Float64,
+    onProgress: (Int64) -> Unit,
+    onSuccess: (ImageTaskResult) -> Unit,
+    onError: (String) -> Unit
+): Unit {
+    let body = "{" + "\"accessCode\":\"${jsonEscape(accessCode)}\"," + "\"prompt\":\"${jsonEscape(prompt)}\"," +
+        "\"width\":${width}," + "\"height\":${height}," + "\"steps\":${steps}," + "\"cfg\":${cfg}" + "}"
+    try {
+        let request = createHttp()
+        let headers = HashMap<String, String>()
+        headers.add("Content-Type", "application/json")
+        headers.add("Accept", "text/event-stream")
+        let options = HttpRequestOptions(
+            method: RequestMethod.Post,
+            extraData: HttpData.StringData(body),
+            expectDataType: HttpDataType.StringValue,
+            usingCache: false,
+            header: headers,
+            readTimeout: 300000u32,
+            connectTimeout: 20000u32
+        )
+        try {
+            request.request(
+                apiUrl("/api/generate-stream"),
+                options,
+                {
+                    err, resp =>
+                        if (let Some(e) <- err) {
+                            let message = e.message
+                            runOnMainThread({
+                                => onError(message)
+                            })
+                            safeDestroyHttpRequest(request)
+                            return
+                        }
+
+                        if (let Some(r) <- resp) {
+                            let responseBody = httpDataToString(r.result)
+                            if (r.responseCode >= 200u32 && r.responseCode < 300u32) {
+                                runOnMainThread({
+                                    => processGenerateSseResponse(responseBody, onProgress, onSuccess, onError)
+                                })
+                            } else {
+                                let message = apiJsonString(responseBody, "error") ?? "HTTP ${r.responseCode}"
+                                runOnMainThread({
+                                    => onError(message)
+                                })
+                            }
+                        } else {
+                            runOnMainThread({
+                                => onError("生成流无响应")
+                            })
+                        }
+                        safeDestroyHttpRequest(request)
+                }
+            )
+        } catch (e: BusinessException) {
+            safeDestroyHttpRequest(request)
+            let message = e.message
+            runOnMainThread({
+                => onError(message)
+            })
+        }
+    } catch (e: BusinessException) {
+        let message = e.message
+        runOnMainThread({
+            => onError(message)
+        })
+    }
+}
+
+func processGenerateSseResponse(
+    raw: String,
+    onProgress: (Int64) -> Unit,
+    onSuccess: (ImageTaskResult) -> Unit,
+    onError: (String) -> Unit
+): Unit {
+    if (raw.isEmpty()) {
+        onError("空响应")
+        return
+    }
+    let lines = Regex("\n").split(raw)
+    var gotComplete: Bool = false
+    for (line in lines) {
+        let t = line.trimAscii()
+        if (!t.startsWith("data: ")) {
+            continue
+        }
+        let jsonPart = t[6..t.size]
+        if (jsonPart.isEmpty()) {
+            continue
+        }
+        if (let Some(st) <- apiJsonString(jsonPart, "status")) {
+            if (st == "error") {
+                onError(apiJsonString(jsonPart, "error") ?? "流式生成失败")
+                return
+            }
+        }
+        if (let Some(p) <- apiJsonInt(jsonPart, "progress")) {
+            onProgress(p)
+        }
+        if (let Some(st2) <- apiJsonString(jsonPart, "status")) {
+            if (st2 == "completed" && (gotComplete == false)) {
+                gotComplete = true
+                onSuccess(parseImageTaskResultFromStreamChunk(jsonPart))
+            }
+        }
+    }
+    if (!gotComplete) {
+        onError("未收到完成事件（可检查网络或服务端）")
+    }
+}
+
+/// completed 事件含嵌套 result，优先从整块 JSON 中提取 image / creditsRemaining
+func parseImageTaskResultFromStreamChunk(chunk: String): ImageTaskResult {
+    let result = ImageTaskResult()
+    result.imageUrl = apiUrl(apiJsonString(chunk, "image") ?? "")
+    result.thumbnailUrl = apiUrl(apiJsonString(chunk, "thumbnail") ?? "")
+    result.prompt = apiJsonString(chunk, "prompt") ?? ""
+    result.creditsUsed = apiJsonInt(chunk, "creditsUsed") ?? 0
+    result.creditsRemaining = apiJsonInt(chunk, "creditsRemaining") ?? -1
+    return result
+}
+
+/// 将图片字节写入应用 files 目录（需 MainAbility 写入 AppStorage.forgeFilesDir）
+func forgeTrySaveImageBytes(bytes: Array<Byte>, fileName: String): ?String {
+    if (bytes.size == 0) {
+        return None<String>
+    }
+    let dir = if (AppStorage.has("forgeFilesDir")) {
+        match (AppStorage.get<String>("forgeFilesDir")) {
+            case Some(s) => s
+            case None => ""
+        }
+    } else {
+        ""
+    }
+    if (dir.isEmpty()) {
+        return None<String>
+    }
+    let pathStr = if (dir.size > 0 && Int32(dir[dir.size - 1]) == 47) {
+        dir + fileName
+    } else {
+        dir + "/" + fileName
+    }
+    try {
+        let p = Path(pathStr)
+        var f = File(p, Write)
+        f.write(bytes)
+        f.close()
+        Some(pathStr)
+    } catch (_: BusinessException) {
+        None<String>
+    }
+}
+
 func apiCheckHealth(
     onSuccess: (HealthCheckResult) -> Unit,
     onError: (String) -> Unit
@@ -272,6 +467,203 @@ func apiPost(
     onError: (String) -> Unit
 ): Unit {
     apiRequest(RequestMethod.Post, path, body, onSuccess, onError)
+}
+
+func httpResultToBytes(data: HttpData): Array<Byte> {
+    match (data) {
+        case HttpData.ArrayData(bytes) => bytes
+        case _ => Array<Byte>()
+    }
+}
+
+/// 下载远程图片字节（用于编辑接口 multipart 上传）
+func apiDownloadImageBytes(
+    imageUrl: String,
+    onSuccess: (Array<Byte>) -> Unit,
+    onError: (String) -> Unit
+): Unit {
+    if (imageUrl.isEmpty()) {
+        runOnMainThread({ => onError("图片地址为空") })
+        return
+    }
+    try {
+        let request = createHttp()
+        let headers = HashMap<String, String>()
+        headers.add("Accept", "image/*,*/*")
+        let options = HttpRequestOptions(
+            method: RequestMethod.Get,
+            extraData: HttpData.StringData(""),
+            expectDataType: HttpDataType.ArrayBuffer,
+            usingCache: false,
+            header: headers,
+            readTimeout: 120000u32,
+            connectTimeout: 25000u32
+        )
+        try {
+            request.request(
+                imageUrl,
+                options,
+                {
+                    err, resp =>
+                        if (let Some(e) <- err) {
+                            let message = e.message
+                            runOnMainThread({
+                                => onError(message)
+                            })
+                            safeDestroyHttpRequest(request)
+                            return
+                        }
+
+                        if (let Some(r) <- resp) {
+                            if (r.responseCode >= 200u32 && r.responseCode < 300u32) {
+                                let bytes = httpResultToBytes(r.result)
+                                if (bytes.size == 0) {
+                                    runOnMainThread({
+                                        => onError("未获取到图片数据")
+                                    })
+                                } else {
+                                    runOnMainThread({
+                                        => onSuccess(bytes)
+                                    })
+                                }
+                            } else {
+                                let responseBody = httpDataToString(r.result)
+                                let message = apiJsonString(responseBody, "error") ?? "HTTP ${r.responseCode}"
+                                runOnMainThread({
+                                    => onError(message)
+                                })
+                            }
+                        } else {
+                            runOnMainThread({
+                                => onError("下载图片无响应")
+                            })
+                        }
+                        safeDestroyHttpRequest(request)
+                }
+            )
+        } catch (e: BusinessException) {
+            safeDestroyHttpRequest(request)
+            let message = e.message
+            runOnMainThread({
+                => onError(message)
+            })
+        }
+    } catch (e: BusinessException) {
+        let message = e.message
+        runOnMainThread({
+            => onError(message)
+        })
+    }
+}
+
+/// POST /api/edit，multipart/form-data（字段与 PTP server.js 一致）
+func apiEditImage(
+    accessCode: String,
+    prompt: String,
+    workflowTemplate: String,
+    imageBytes: Array<Byte>,
+    onSuccess: (ImageTaskResult) -> Unit,
+    onError: (String) -> Unit
+): Unit {
+    if (imageBytes.size == 0) {
+        runOnMainThread({ => onError("图片数据为空") })
+        return
+    }
+    try {
+        let request = createHttp()
+        let headers = HashMap<String, String>()
+        headers.add("Accept", "application/json")
+        let formImage = MultiFormData(
+            "image",
+            "image/jpeg",
+            remoteFileName: "edit.jpg",
+            data: HttpData.ArrayData(imageBytes)
+        )
+        let formPrompt = MultiFormData(
+            "prompt",
+            "text/plain",
+            remoteFileName: "",
+            data: HttpData.StringData(prompt)
+        )
+        let formCode = MultiFormData(
+            "accessCode",
+            "text/plain",
+            remoteFileName: "",
+            data: HttpData.StringData(accessCode)
+        )
+        let formTpl = MultiFormData(
+            "workflowTemplate",
+            "text/plain",
+            remoteFileName: "",
+            data: HttpData.StringData(workflowTemplate)
+        )
+        let multiParts: Array<MultiFormData> = [formCode, formPrompt, formTpl, formImage]
+        let options = HttpRequestOptions(
+            method: RequestMethod.Post,
+            extraData: HttpData.StringData(""),
+            expectDataType: HttpDataType.StringValue,
+            usingCache: false,
+            header: headers,
+            readTimeout: 180000u32,
+            connectTimeout: 20000u32,
+            multiFormDataList: multiParts
+        )
+        try {
+            request.request(
+                apiUrl("/api/edit"),
+                options,
+                {
+                    err, resp =>
+                        if (let Some(e) <- err) {
+                            let message = e.message
+                            runOnMainThread({
+                                => onError(message)
+                            })
+                            safeDestroyHttpRequest(request)
+                            return
+                        }
+
+                        if (let Some(r) <- resp) {
+                            let responseBody = httpDataToString(r.result)
+                            if (r.responseCode >= 200u32 && r.responseCode < 300u32) {
+                                if (apiJsonBool(responseBody, "success") ?? false) {
+                                    let parsed = parseImageTaskResult(responseBody)
+                                    runOnMainThread({
+                                        => onSuccess(parsed)
+                                    })
+                                } else {
+                                    let message = apiJsonString(responseBody, "error") ?? "编辑失败"
+                                    runOnMainThread({
+                                        => onError(message)
+                                    })
+                                }
+                            } else {
+                                let message = apiJsonString(responseBody, "error") ?? "HTTP ${r.responseCode}"
+                                runOnMainThread({
+                                    => onError(message)
+                                })
+                            }
+                        } else {
+                            runOnMainThread({
+                                => onError("服务端没有返回响应")
+                            })
+                        }
+                        safeDestroyHttpRequest(request)
+                }
+            )
+        } catch (e: BusinessException) {
+            safeDestroyHttpRequest(request)
+            let message = e.message
+            runOnMainThread({
+                => onError(message)
+            })
+        }
+    } catch (e: BusinessException) {
+        let message = e.message
+        runOnMainThread({
+            => onError(message)
+        })
+    }
 }
 
 func apiRequest(

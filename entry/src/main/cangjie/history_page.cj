@@ -2,13 +2,24 @@ package ohos_app_cangjie_entry
 
 import kit.ArkUI.*
 import ohos.arkui.state_macro_manage.*
+import std.regex.*
 
 @Component
 class HistoryPage {
     @Prop var currentLang: String
-    @State var historyItems: Array<String> = []
+    @Prop var contentTopInset: Float64
+    @Prop var bottomBarOverlapVp: Float64
+    @StorageProp["imageForgeHistoryLines"]
+    let historyBlob: String = ""
     @State var showDetail: Bool = false
     @State var selectedIndex: Int64 = -1
+
+    func historyLines(): Array<String> {
+        if (this.historyBlob.isEmpty()) {
+            return []
+        }
+        return Regex("\n").split(this.historyBlob)
+    }
 
     func build() {
         Column {
@@ -25,17 +36,23 @@ class HistoryPage {
                     .fontColor(0xFF86868B)
             }
             .width(100.percent)
-            .padding(left: 16, right: 16, top: 16, bottom: 12)
+            .padding(top: 16, bottom: 12)
 
-            if (this.historyItems.size == 0) {
+            if (this.historyLines().size == 0) {
                 this.buildEmptyState()
             } else {
-                this.buildHistoryList()
+                this.buildHistoryList(this.historyLines())
             }
         }
         .width(100.percent)
         .height(100.percent)
-        .backgroundColor(0xFFF2F2F7)
+        .padding(
+            left: 16,
+            right: 16,
+            top: this.contentTopInset,
+            bottom: this.bottomBarOverlapVp
+        )
+        .backgroundColor(0xFFF0F3FA)
     }
 
     @Builder
@@ -59,9 +76,9 @@ class HistoryPage {
     }
 
     @Builder
-    func buildHistoryList() {
+    func buildHistoryList(historyItems: Array<String>) {
         List() {
-            ForEach(this.historyItems, itemGenerator: { item: String, index: Int64 =>
+            ForEach(historyItems, itemGenerator: { item: String, index: Int64 =>
                 ListItem() {
                     Row {
                         Column {
@@ -69,22 +86,31 @@ class HistoryPage {
                                 .fontSize(14)
                                 .fontWeight(FontWeight.Medium)
                                 .fontColor(0xFF1D1D1F)
+                                .width(100.percent)
 
                             Text(item)
                                 .fontSize(12)
                                 .fontColor(0xFF86868B)
                                 .margin(top: 4)
-                                .maxLines(1)
+                                .maxLines(3)
                                 .textOverflow(TextOverflow.Ellipsis)
+                                .width(100.percent)
                         }
                         .alignItems(HorizontalAlign.Start)
                         .layoutWeight(1)
                     }
                     .width(100.percent)
                     .padding(16)
-                    .backgroundColor(0xFFFFFFFF)
-                    .borderRadius(12)
-                    .margin(left: 16, right: 16, bottom: 8)
+                    .linearGradient(
+                        direction: GradientDirection.Right,
+                        colors: [(0xFFF2F6FC, 0.0), (0xFFE8EEF8, 1.0)]
+                    )
+                    .backdropBlur(18.0)
+                    .borderRadius(14)
+                    .borderWidth(1)
+                    .borderColor(0x5EFFFFFF)
+                    .margin(bottom: 8)
+                    .shadow(radius: 10.0, color: 0x10000000, offsetX: 0.0, offsetY: 4.0)
                 }
             })
         }
