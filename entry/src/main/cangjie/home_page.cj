@@ -6,133 +6,207 @@ import ohos.arkui.state_macro_manage.*
 @Component
 class HomePage {
     @Prop var currentLang: String
-    var onNavigate: (Int32) -> Unit = { _: Int32 => }
+    @Prop var contentTopInset: Float64
+    @Prop var hMarginVp: Float64
+    @Prop var bottomBarOverlapVp: Float64
+    @State var scrollY: Float64 = 0.0
+    var onNavigateTab: (Int32) -> Unit = { _: Int32 => }
+    var onOpenEditor: (String, String) -> Unit = { _: String, _: String => }
+
+    func getStartEditLabel(): String {
+        if (this.currentLang == "zh") {
+            "开始编辑图片"
+        } else {
+            "Start editing"
+        }
+    }
+
+    func getStartGenerateLabel(): String {
+        if (this.currentLang == "zh") {
+            "开始生成图片"
+        } else {
+            "Start generating"
+        }
+    }
+
+    func heroTitle(): String {
+        "ImageForge"
+    }
+
+    func heroSubtitle(): String {
+        if (this.currentLang == "zh") {
+            "AI 驱动的图片编辑与合成"
+        } else {
+            "AI image editing & composition"
+        }
+    }
+
+    func blurMix(a: Float64, b: Float64, lim: Float64): Float64 {
+        let r = a / b
+        if (r < lim) {
+            r
+        } else {
+            lim
+        }
+    }
 
     func build() {
         Scroll() {
             Column {
-                Text("ImageForge")
-                    .fontSize(28)
-                    .fontWeight(FontWeight.Bold)
-                    .fontColor(0xFF1D1D1F)
-                    .margin(top: 24, bottom: 4)
+                Blank().height(6)
 
-                Text("AI 驱动的图像编辑与生成")
-                    .fontSize(14)
-                    .fontColor(0xFF86868B)
-                    .margin(bottom: 24)
+                Text(this.heroTitle())
+                    .fontSize(30)
+                    .fontWeight(FontWeight.Bold)
+                    .fontColor(0xFF141820)
+                    .margin(bottom: 6)
+
+                Text(this.heroSubtitle())
+                    .fontSize(15)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(0xFF5C6670)
+                    .lineHeight(22)
+                    .margin(bottom: 22)
 
                 this.buildFeatureCards()
 
                 this.buildQuickActions()
             }
             .width(100.percent)
-            .padding(left: 16, right: 16)
-            .alignItems(HorizontalAlign.Start)
+            .padding(
+                left: this.hMarginVp,
+                right: this.hMarginVp,
+                top: this.contentTopInset,
+                bottom: this.bottomBarOverlapVp
+            )
+            .opacity(1.0 - this.blurMix(this.scrollY, 220.0, 0.18))
+            .backdropBlur(6.0 + this.blurMix(this.scrollY, 28.0, 12.0))
         }
         .width(100.percent)
         .height(100.percent)
         .scrollBar(BarState.Off)
+        .backgroundColor(0xFFF0F3FA)
+        .onDidScroll({
+            _, yOffset: Float64, _: ScrollState =>
+                this.scrollY = yOffset
+        })
     }
 
     @Builder
     func buildFeatureCards() {
         Column {
             Row {
-                this.buildCard("风格化修图", "自然语言编辑 + Flux2 工作流")
-                this.buildCard("高清增强", "lanczos 放大 + 更高像素与步数")
+                this.buildGlassCard("风格化修图", "自然语言编辑 · Flux2", {
+                    => this.onOpenEditor("edit", "style")
+                })
+                Blank().width(12)
+                this.buildGlassCard("高清增强", "lanczos · 更高清细节", {
+                    => this.onOpenEditor("edit", "upscale")
+                })
             }
             .width(100.percent)
-            .justifyContent(FlexAlign.SpaceBetween)
 
             Row {
-                this.buildCard("背景重绘", "提高 CFG + 中等步数，配合背景提示")
-                this.buildCard("文生图", "输入文字描述，生成全新图像")
+                this.buildGlassCard("背景重绘", "CFG 与步数适配图景", {
+                    => this.onOpenEditor("edit", "background")
+                })
+                Blank().width(12)
+                this.buildGlassCard("文生图", "文字描述生成全新图像", {
+                    => this.onOpenEditor("generate", "style")
+                })
             }
             .width(100.percent)
-            .justifyContent(FlexAlign.SpaceBetween)
-            .margin(top: 12)
-
-            Row {
-                this.buildCard("历史记录", "本机保存的成功任务，可离线回看")
-                this.buildCard("服务设置", "健康检查与版本信息")
-            }
-            .width(100.percent)
-            .justifyContent(FlexAlign.SpaceBetween)
             .margin(top: 12)
         }
         .width(100.percent)
-        .margin(bottom: 24)
+        .margin(bottom: 28)
     }
 
+    /// 两列等宽、等高卡片
     @Builder
-    func buildCard(title: String, desc: String) {
+    func buildGlassCard(title: String, desc: String, onTap: () -> Unit) {
         Column {
             Text(title)
                 .fontSize(16)
                 .fontWeight(FontWeight.Bold)
-                .fontColor(0xFF1D1D1F)
-                .margin(bottom: 6)
+                .fontColor(0xFF1A2430)
+                .margin(bottom: 8)
 
             Text(desc)
                 .fontSize(12)
-                .fontColor(0xFF86868B)
-                .maxLines(2)
+                .fontColor(0xFF6B7680)
+                .maxLines(3)
                 .textOverflow(TextOverflow.Ellipsis)
         }
-        .width(48.percent)
-        .padding(20)
-        .backgroundColor(0xFFFFFFFF)
-        .borderRadius(16)
+        .layoutWeight(1)
+        .height(148)
+        .padding(18)
+        .justifyContent(FlexAlign.Start)
+        .linearGradient(
+            direction: GradientDirection.RightBottom,
+            colors: [(0xFFECF6FF, 0.0), (0xFFD6E8FF, 0.55), (0xFFC4DDFF, 1.0)]
+        )
+        .backdropBlur(22.0)
+        .borderRadius(20)
+        .borderWidth(1)
+        .borderColor(0x66FFFFFF)
         .alignItems(HorizontalAlign.Start)
-        .onClick({ _: ClickEvent =>
-            if (title == "历史记录") {
-                this.onNavigate(2)
-            } else if (title == "服务设置") {
-                this.onNavigate(3)
-            } else {
-                this.onNavigate(1)
-            }
-        })
+        .clip(true)
+        .shadow(radius: 20.0, color: 0x16000055, offsetX: 0.0, offsetY: 8.0)
+        .onClick({ _: ClickEvent => onTap() })
     }
 
     @Builder
     func buildQuickActions() {
         Column {
-            Text("快速开始")
+            Text(if (this.currentLang == "zh") {
+                "快速开始"
+            } else {
+                "Quick start"
+            })
                 .fontSize(18)
                 .fontWeight(FontWeight.Bold)
-                .fontColor(0xFF1D1D1F)
-                .margin(bottom: 12)
+                .fontColor(0xFF1A2430)
+                .margin(bottom: 14)
 
-            Button("开始编辑图片")
+            Button(this.getStartEditLabel())
                 .shape(ButtonType.Capsule)
                 .width(100.percent)
-                .height(48)
-                .backgroundColor(0xFF007AFF)
-                .fontColor(0xFFFFFFFF)
+                .height(50)
                 .fontSize(16)
                 .fontWeight(FontWeight.Medium)
+                .fontColor(0xFF10305C)
+                .linearGradient(
+                    direction: GradientDirection.RightBottom,
+                    colors: [(0xFFDBEEFF, 0.0), (0xFFB8CEFF, 1.0)]
+                )
+                .borderWidth(1)
+                .borderColor(0x55FFFFFF)
+                .shadow(radius: 18.0, color: 0x1800286E, offsetX: 0.0, offsetY: 6.0)
                 .margin(bottom: 12)
                 .onClick({ _: ClickEvent =>
-                    this.onNavigate(1)
+                    this.onOpenEditor("edit", "style")
                 })
 
-            Button("查看历史记录")
+            Button(this.getStartGenerateLabel())
                 .shape(ButtonType.Capsule)
                 .width(100.percent)
-                .height(48)
-                .backgroundColor(0xFFFFFFFF)
-                .fontColor(0xFF007AFF)
+                .height(50)
                 .fontSize(16)
                 .fontWeight(FontWeight.Medium)
+                .fontColor(0xFF10305C)
+                .linearGradient(
+                    direction: GradientDirection.RightBottom,
+                    colors: [(0xFFE8F3FF, 0.0), (0xFFC5DBFF, 1.0)]
+                )
                 .borderWidth(1)
-                .borderColor(0xFFE5E5EA)
+                .borderColor(0x55FFFFFF)
+                .shadow(radius: 14.0, color: 0x1200286E, offsetX: 0.0, offsetY: 5.0)
                 .onClick({ _: ClickEvent =>
-                    this.onNavigate(2)
+                    this.onOpenEditor("generate", "style")
                 })
         }
         .width(100.percent)
-        .padding(bottom: 24)
+        .padding(bottom: 28)
     }
 }

@@ -7,6 +7,10 @@ import ohos.arkui.state_macro_manage.*
 class SettingsPage {
     @Prop
     var currentLang: String
+    @Prop
+    var contentTopInset: Float64
+    @Prop
+    var bottomBarOverlapVp: Float64
     @State
     var healthStatus: String = "—"
     @State
@@ -31,8 +35,13 @@ class SettingsPage {
                 this.buildArchBlock()
 
                 this.buildDataBlock()
-            }.width(100.percent).padding(left: 16, right: 16)
-        }.width(100.percent).height(100.percent).scrollBar(BarState.Off).backgroundColor(0xFFF2F2F7)
+            }.width(100.percent).padding(left: 16, right: 16, bottom: this.bottomBarOverlapVp)
+        }
+        .width(100.percent)
+        .height(100.percent)
+        .padding(top: this.contentTopInset)
+        .scrollBar(BarState.Off)
+        .backgroundColor(0xFFF0F3FA)
     }
 
     @Builder
@@ -45,11 +54,12 @@ class SettingsPage {
             Button(this.getHealthCheckButtonLabel())
                 .shape(ButtonType.Capsule)
                 .height(40)
-                .backgroundColor(0xFFFFFFFF)
+                .backgroundColor(0xD9FFFFFF)
+                .backdropBlur(14.0)
                 .fontColor(0xFF007AFF)
                 .fontSize(14)
                 .borderWidth(1)
-                .borderColor(0xFFE5E5EA)
+                .borderColor(0x59FFFFFF)
                 .enabled(!this.isChecking)
                 .onClick({
                     _: ClickEvent => this.handleHealthCheck()
@@ -61,13 +71,17 @@ class SettingsPage {
                 .fontColor(0xFF86868B)
                 .width(100.percent)
                 .padding(12)
-                .backgroundColor(0xFFF2F2F7)
+                .backgroundColor(0xCCFFFFFF)
+                .backdropBlur(12.0)
                 .borderRadius(8)
         }
             .width(100.percent)
             .padding(20)
-            .backgroundColor(0xFFFFFFFF)
+            .backgroundColor(0xE6FFFFFF)
+            .backdropBlur(24.0)
             .borderRadius(16)
+            .borderWidth(1)
+            .borderColor(0x59FFFFFF)
             .margin(bottom: 12)
             .alignItems(HorizontalAlign.Start)
     }
@@ -82,13 +96,17 @@ class SettingsPage {
                 .fontColor(0xFF86868B)
                 .width(100.percent)
                 .padding(12)
-                .backgroundColor(0xFFF2F2F7)
+                .backgroundColor(0xCCFFFFFF)
+                .backdropBlur(12.0)
                 .borderRadius(8)
         }
             .width(100.percent)
             .padding(20)
-            .backgroundColor(0xFFFFFFFF)
+            .backgroundColor(0xE6FFFFFF)
+            .backdropBlur(24.0)
             .borderRadius(16)
+            .borderWidth(1)
+            .borderColor(0x59FFFFFF)
             .margin(bottom: 12)
             .alignItems(HorizontalAlign.Start)
     }
@@ -105,8 +123,11 @@ class SettingsPage {
         }
             .width(100.percent)
             .padding(20)
-            .backgroundColor(0xFFFFFFFF)
+            .backgroundColor(0xE6FFFFFF)
+            .backdropBlur(24.0)
             .borderRadius(16)
+            .borderWidth(1)
+            .borderColor(0x59FFFFFF)
             .margin(bottom: 12)
             .alignItems(HorizontalAlign.Start)
     }
@@ -124,19 +145,23 @@ class SettingsPage {
             Button("清空全部历史")
                 .shape(ButtonType.Capsule)
                 .height(40)
-                .backgroundColor(0xFFFFFFFF)
+                .backgroundColor(0xE6FFFFFF)
+                .backdropBlur(14.0)
                 .fontColor(0xFFFF3B30)
                 .fontSize(14)
                 .borderWidth(1)
-                .borderColor(0xFFFF3B30)
+                .borderColor(0x99FF3B30)
                 .onClick({
                     _: ClickEvent =>
                 })
         }
             .width(100.percent)
             .padding(20)
-            .backgroundColor(0xFFFFFFFF)
+            .backgroundColor(0xE6FFFFFF)
+            .backdropBlur(24.0)
             .borderRadius(16)
+            .borderWidth(1)
+            .borderColor(0x59FFFFFF)
             .margin(bottom: 24)
             .alignItems(HorizontalAlign.Start)
     }
