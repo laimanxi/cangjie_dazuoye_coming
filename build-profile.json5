@@ -1,24 +1,9 @@
 {
   "app": {
-    "signingConfigs": [
-      {
-        "name": "default",
-        "type": "HarmonyOS",
-        "material": {
-          "certpath": "C:\\Users\\lmx17\\.ohos\\config\\default_cangjie_dazuoye_try_r23Bc3GLy8TdMzCCcmeAw_8EqZbN7w-fSFMpMQZ4alU=.cer",
-          "keyAlias": "debugKey",
-          "keyPassword": "0000001AA7148104784D5DA71CD0091B339F214FDFFFE57D73B53DBE6BF22AB05266A3FB254CEECF04F1",
-          "profile": "C:\\Users\\lmx17\\.ohos\\config\\default_cangjie_dazuoye_try_r23Bc3GLy8TdMzCCcmeAw_8EqZbN7w-fSFMpMQZ4alU=.p7b",
-          "signAlg": "SHA256withECDSA",
-          "storeFile": "C:\\Users\\lmx17\\.ohos\\config\\default_cangjie_dazuoye_try_r23Bc3GLy8TdMzCCcmeAw_8EqZbN7w-fSFMpMQZ4alU=.p12",
-          "storePassword": "0000001A3669D53FB9551CD94895BDAC35D847BF8F59FE2C690A9A40D250C6F4170365CE8ED11C9C0116"
-        }
-      }
-    ],
+    "signingConfigs": [],
     "products": [
       {
         "name": "default",
-        "signingConfig": "default",
         "targetSdkVersion": "6.0.2(22)",
         "compatibleSdkVersion": "6.0.2(22)",
         "runtimeOS": "HarmonyOS",
