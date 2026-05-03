@@ -8,8 +8,12 @@ import std.collection.*
 import std.convert.*
 import std.regex.*
 import std.fs.*
+import std.fs.Path as FsPath
+import std.time.*
 
 let IMAGE_FORGE_HISTORY_KEY: String = "imageForgeHistoryLines"
+/// 历史单行字段分隔符；格式：时间·标题·提示词·图片地址
+let IMAGE_FORGE_HISTORY_FIELD_SEP: String = "\u{001E}"
 /// 创作页「上传图片」演示用可加载的远程图（真机需网络）；后续可替换为相册选择结果。
 let IMAGE_FORGE_DEMO_EDIT_URL: String = "https://picsum.photos/seed/imageforge-edit/1024/768"
 
@@ -46,6 +50,125 @@ func imageForgeHistoryAppend(summary: String): Unit {
         line + "\n" + prev
     }
     AppStorage.setOrCreate(IMAGE_FORGE_HISTORY_KEY, next)
+}
+
+func imageForgeSanitizeHistoryField(s: String): String {
+    var t = Regex("\r|\n").replaceAll(s, " ")
+    t = Regex("\\s+").replaceAll(t, " ").trimAscii()
+    return t.replace(IMAGE_FORGE_HISTORY_FIELD_SEP, " ")
+}
+
+/// 写入结构化历史（保留完整图片 URL，供历史页缩略图与大图预览）
+func imageForgeHistoryAppendRecord(cardTitle: String, prompt: String, imageUrl: String): Unit {
+    let ts = DateTime.now().format("yyyy/MM/dd HH:mm:ss")
+    let title = imageForgeSanitizeHistoryField(cardTitle)
+    var p = imageForgeSanitizeHistoryField(prompt)
+    if (p.size > 800) {
+        p = p[0..800]
+    }
+    let u = imageForgeSanitizeHistoryField(imageUrl)
+    if (u.isEmpty()) {
+        return
+    }
+    let line = ts + IMAGE_FORGE_HISTORY_FIELD_SEP + title + IMAGE_FORGE_HISTORY_FIELD_SEP + p +
+        IMAGE_FORGE_HISTORY_FIELD_SEP + u
+    let prev = if (AppStorage.has(IMAGE_FORGE_HISTORY_KEY)) {
+        match (AppStorage.get<String>(IMAGE_FORGE_HISTORY_KEY)) {
+            case Some(s) => s
+            case None => ""
+        }
+    } else {
+        ""
+    }
+    let next = if (prev.isEmpty()) {
+        line
+    } else {
+        line + "\n" + prev
+    }
+    AppStorage.setOrCreate(IMAGE_FORGE_HISTORY_KEY, next)
+}
+
+class ParsedHistoryCard {
+    public var timeLabel: String = "—"
+    public var cardTitle: String = ""
+    public var promptPreview: String = ""
+    public var imageUrl: String = ""
+
+    public init() {}
+}
+
+func imageForgeJoinHistorySlice(parts: Array<String>, lo: Int64, hiExclusive: Int64, glue: String): String {
+    if (hiExclusive <= lo) {
+        return ""
+    }
+    var acc = parts[lo]
+    var k = lo + 1
+    while (k < hiExclusive) {
+        acc = acc + glue + parts[k]
+        k += 1
+    }
+    return acc
+}
+
+func imageForgeLooksLikeImageUrl(u: String): Bool {
+    let t = u.trimAscii()
+    return t.startsWith("https://") || t.startsWith("http://") || t.startsWith("file://")
+}
+
+func historyMapLegacyHeadToTitle(head: String, currentLang: String): String {
+    if (currentLang != "zh") {
+        if (head == "文生图") {
+            return "Generated image"
+        }
+        if (head == "编辑") {
+            return "Edited image"
+        }
+        return head
+    }
+    if (head == "文生图") {
+        return "生成图片"
+    }
+    if (head == "编辑") {
+        return "编辑图片"
+    }
+    return head
+}
+
+func imageForgeParseHistoryLine(currentLang: String, line: String): ParsedHistoryCard {
+    let card = ParsedHistoryCard()
+    let raw = line.trimAscii()
+    if (raw.isEmpty()) {
+        return card
+    }
+
+    if (raw.contains(IMAGE_FORGE_HISTORY_FIELD_SEP)) {
+        let fields = Regex(IMAGE_FORGE_HISTORY_FIELD_SEP).split(raw)
+        if (fields.size >= 4) {
+            card.timeLabel = fields[0]
+            card.cardTitle = fields[1]
+            card.imageUrl = fields[fields.size - 1].trimAscii()
+            card.promptPreview = imageForgeJoinHistorySlice(
+                fields,
+                2,
+                fields.size - 1,
+                IMAGE_FORGE_HISTORY_FIELD_SEP
+            )
+        } else {
+            card.promptPreview = raw
+        }
+        return card
+    }
+
+    let dotParts = Regex(" · ").split(raw)
+    if (dotParts.size >= 3 && imageForgeLooksLikeImageUrl(dotParts[dotParts.size - 1])) {
+        card.cardTitle = historyMapLegacyHeadToTitle(dotParts[0], currentLang)
+        card.imageUrl = dotParts[dotParts.size - 1].trimAscii()
+        card.promptPreview = imageForgeJoinHistorySlice(dotParts, 1, dotParts.size - 1, " · ")
+        return card
+    }
+
+    card.promptPreview = raw
+    return card
 }
 
 enum EditTemplate {
@@ -371,15 +494,13 @@ func processGenerateSseResponse(
     }
 }
 
-/// completed 事件含嵌套 result，优先从整块 JSON 中提取 image / creditsRemaining
+/// SSE 完成事件通常为顶层 status + 嵌套 result.image（PTP `/api/generate-stream` 文档）
 func parseImageTaskResultFromStreamChunk(chunk: String): ImageTaskResult {
-    let result = ImageTaskResult()
-    result.imageUrl = apiUrl(apiJsonString(chunk, "image") ?? "")
-    result.thumbnailUrl = apiUrl(apiJsonString(chunk, "thumbnail") ?? "")
-    result.prompt = apiJsonString(chunk, "prompt") ?? ""
-    result.creditsUsed = apiJsonInt(chunk, "creditsUsed") ?? 0
-    result.creditsRemaining = apiJsonInt(chunk, "creditsRemaining") ?? -1
-    return result
+    if (let Some(resultBody) <- apiJsonObject(chunk, "result")) {
+        parseImageTaskResult(resultBody)
+    } else {
+        parseImageTaskResult(chunk)
+    }
 }
 
 /// 将图片字节写入应用 files 目录（需 MainAbility 写入 AppStorage.forgeFilesDir）
@@ -404,7 +525,7 @@ func forgeTrySaveImageBytes(bytes: Array<Byte>, fileName: String): ?String {
         dir + "/" + fileName
     }
     try {
-        let p = Path(pathStr)
+        let p = FsPath(pathStr)
         var f = File(p, Write)
         f.write(bytes)
         f.close()
@@ -839,6 +960,42 @@ func apiJsonBool(body: String, key: String): ?Bool {
         }
     }
     return None<Bool>
+}
+
+func apiJsonObject(body: String, key: String): ?String {
+    if (let Some(start) <- apiJsonValueStart(body, key)) {
+        if (start >= body.size || body[start] != b'{') {
+            return None<String>
+        }
+
+        var index = start
+        var depth: Int64 = 0
+        var inString = false
+        var escaped = false
+        while (index < body.size) {
+            let current = body[index]
+            if (inString) {
+                if (escaped) {
+                    escaped = false
+                } else if (current == b'\\') {
+                    escaped = true
+                } else if (current == b'\"') {
+                    inString = false
+                }
+            } else if (current == b'\"') {
+                inString = true
+            } else if (current == b'{') {
+                depth += 1
+            } else if (current == b'}') {
+                depth -= 1
+                if (depth == 0) {
+                    return Some(body[start..(index + 1)])
+                }
+            }
+            index += 1
+        }
+    }
+    return None<String>
 }
 
 func apiJsonPrimitive(body: String, key: String): ?String {

@@ -6,53 +6,142 @@ import std.regex.*
 
 @Component
 class HistoryPage {
-    @Prop var currentLang: String
-    @Prop var contentTopInset: Float64
-    @Prop var bottomBarOverlapVp: Float64
+    @Prop
+    var currentLang: String
+    @Prop
+    var contentTopInset: Float64
+    @Prop
+    var bottomBarOverlapVp: Float64
     @StorageProp["imageForgeHistoryLines"]
     let historyBlob: String = ""
-    @State var showDetail: Bool = false
-    @State var selectedIndex: Int64 = -1
+    @State
+    var showPreview: Bool = false
+    @State
+    var previewImageUri: String = ""
+    @State
+    var refreshNonce: Int64 = 0
 
     func historyLines(): Array<String> {
+        let _ = this.refreshNonce
+        let _ = this.historyBlob.size
         if (this.historyBlob.isEmpty()) {
             return []
         }
         return Regex("\n").split(this.historyBlob)
     }
 
+    func parsedRow(line: String): ParsedHistoryCard {
+        imageForgeParseHistoryLine(this.currentLang, line)
+    }
+
+    func openPreview(uri: String): Unit {
+        let u = uri.trimAscii()
+        if (u.isEmpty() || !imageForgeLooksLikeImageUrl(u)) {
+            return
+        }
+        this.previewImageUri = u
+        this.showPreview = true
+    }
+
+    func closePreview(): Unit {
+        this.showPreview = false
+        this.previewImageUri = ""
+    }
+
     func build() {
-        Column {
-            Row {
-                Text("历史记录")
-                    .fontSize(22)
-                    .fontWeight(FontWeight.Bold)
-                    .fontColor(0xFF1D1D1F)
+        Stack(alignContent: Alignment.TopStart) {
+            Column {
+                Row {
+                    Text("历史记录")
+                        .fontSize(22)
+                        .fontWeight(FontWeight.Bold)
+                        .fontColor(0xFF1D1D1F)
 
-                Blank()
+                    Blank()
 
-                Text("仅保存在本设备")
-                    .fontSize(12)
-                    .fontColor(0xFF86868B)
+                    Button("刷新")
+                        .shape(ButtonType.Capsule)
+                        .height(32)
+                        .fontSize(13)
+                        .fontColor(0xFF007AFF)
+                        .backgroundColor(0xFFFFFFFF)
+                        .borderWidth(1)
+                        .borderColor(0xFFE5E5EA)
+                        .margin(right: 12)
+                        .onClick({ _: ClickEvent => this.refreshNonce += 1 })
+
+                    Text("仅保存在本设备").fontSize(12).fontColor(0xFF86868B)
+                }
+                .width(100.percent)
+                .padding(top: 16, bottom: 12)
+
+                if (this.historyLines().size == 0) {
+                    this.buildEmptyState()
+                } else {
+                    this.buildHistoryList()
+                }
             }
             .width(100.percent)
-            .padding(top: 16, bottom: 12)
+            .height(100.percent)
+            .padding(
+                left: 16,
+                right: 16,
+                top: this.contentTopInset,
+                bottom: this.bottomBarOverlapVp
+            )
+            .backgroundColor(0xFFF0F3FA)
 
-            if (this.historyLines().size == 0) {
-                this.buildEmptyState()
-            } else {
-                this.buildHistoryList(this.historyLines())
+            if (this.showPreview && !this.previewImageUri.isEmpty()) {
+                this.buildPreviewOverlay()
             }
         }
         .width(100.percent)
         .height(100.percent)
-        .padding(
-            left: 16,
-            right: 16,
-            top: this.contentTopInset,
-            bottom: this.bottomBarOverlapVp
-        )
-        .backgroundColor(0xFFF0F3FA)
+    }
+
+    @Builder
+    func buildPreviewOverlay() {
+        Stack(alignContent: Alignment.Center) {
+            Column {}
+                .width(100.percent)
+                .height(100.percent)
+                .backgroundColor(0xE6000000)
+                .onClick({ _: ClickEvent => this.closePreview() })
+
+            Column {
+                Text(if (this.currentLang == "zh") {
+                    "预览"
+                } else {
+                    "Preview"
+                })
+                    .fontSize(16)
+                    .fontWeight(FontWeight.Medium)
+                    .fontColor(0xFFFFFFFF)
+                    .margin(bottom: 14)
+
+                Image(this.previewImageUri)
+                    .width(94.percent)
+                    .height(460)
+                    .objectFit(ImageFit.Contain)
+
+                Button(if (this.currentLang == "zh") {
+                    "关闭"
+                } else {
+                    "Close"
+                })
+                    .shape(ButtonType.Capsule)
+                    .margin(top: 18)
+                    .fontSize(14)
+                    .backgroundColor(0xFF007AFF)
+                    .fontColor(0xFFFFFFFF)
+                    .onClick({ _: ClickEvent => this.closePreview() })
+            }
+            .width(94.percent)
+            .padding(bottom: 28)
+        }
+            .width(100.percent)
+            .height(100.percent)
+            .zIndex(100)
     }
 
     @Builder
@@ -76,45 +165,84 @@ class HistoryPage {
     }
 
     @Builder
-    func buildHistoryList(historyItems: Array<String>) {
+    func buildHistoryList() {
         List() {
-            ForEach(historyItems, itemGenerator: { item: String, index: Int64 =>
+            ForEach(this.historyLines(), itemGenerator: { line: String, _: Int64 =>
                 ListItem() {
                     Row {
+                        if (!this.parsedRow(line).imageUrl.isEmpty()) {
+                            Image(this.parsedRow(line).imageUrl)
+                                .width(92)
+                                .height(92)
+                                .borderRadius(12)
+                                .objectFit(ImageFit.Cover)
+                                .margin(right: 14)
+                        } else {
+                            Column {
+                                Text(if (this.currentLang == "zh") {
+                                    "无图"
+                                } else {
+                                    "No img"
+                                })
+                                    .fontSize(12)
+                                    .fontColor(0xFFAEAEB2)
+                            }
+                                .width(92)
+                                .height(92)
+                                .borderRadius(12)
+                                .backgroundColor(0xFFE8E8ED)
+                                .justifyContent(FlexAlign.Center)
+                                .alignItems(HorizontalAlign.Center)
+                                .margin(right: 14)
+                        }
+
                         Column {
-                            Text("任务 ${index + 1}")
-                                .fontSize(14)
+                            Text(if (!this.parsedRow(line).cardTitle.isEmpty()) {
+                                this.parsedRow(line).cardTitle
+                            } else if (this.currentLang == "zh") {
+                                "任务记录"
+                            } else {
+                                "Task"
+                            })
+                                .fontSize(15)
                                 .fontWeight(FontWeight.Medium)
                                 .fontColor(0xFF1D1D1F)
+                                .maxLines(1)
+                                .textOverflow(TextOverflow.Ellipsis)
                                 .width(100.percent)
 
-                            Text(item)
-                                .fontSize(12)
-                                .fontColor(0xFF86868B)
-                                .margin(top: 4)
-                                .maxLines(3)
+                            Text(this.parsedRow(line).promptPreview)
+                                .fontSize(13)
+                                .fontColor(0xFF636366)
+                                .margin(top: 6)
+                                .maxLines(2)
                                 .textOverflow(TextOverflow.Ellipsis)
+                                .width(100.percent)
+
+                            Text(this.parsedRow(line).timeLabel)
+                                .fontSize(11)
+                                .fontColor(0xFFAEAEB2)
+                                .margin(top: 8)
                                 .width(100.percent)
                         }
                         .alignItems(HorizontalAlign.Start)
                         .layoutWeight(1)
+                        .justifyContent(FlexAlign.Center)
                     }
                     .width(100.percent)
-                    .padding(16)
-                    .linearGradient(
-                        direction: GradientDirection.Right,
-                        colors: [(0xFFF2F6FC, 0.0), (0xFFE8EEF8, 1.0)]
-                    )
-                    .backdropBlur(18.0)
+                    .padding(14)
+                    .backgroundColor(0xFFFFFFFF)
                     .borderRadius(14)
                     .borderWidth(1)
-                    .borderColor(0x5EFFFFFF)
-                    .margin(bottom: 8)
-                    .shadow(radius: 10.0, color: 0x10000000, offsetX: 0.0, offsetY: 4.0)
+                    .borderColor(0xFFE5E5EA)
+                    .margin(bottom: 10)
+                    .shadow(radius: 8.0, color: 0x0F000000, offsetX: 0.0, offsetY: 3.0)
+                    .onClick({ _: ClickEvent => this.openPreview(this.parsedRow(line).imageUrl) })
                 }
             })
         }
-        .width(100.percent)
-        .layoutWeight(1)
+            .id("${this.refreshNonce}_${this.historyBlob.size}")
+            .width(100.percent)
+            .layoutWeight(1)
     }
 }

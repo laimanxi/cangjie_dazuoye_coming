@@ -3,6 +3,7 @@ package ohos_app_cangjie_entry
 import kit.ArkUI.*
 import ohos.arkui.state_macro_manage.*
 import std.convert.*
+import std.fs.*
 
 @Component
 class EditorPage {
@@ -39,6 +40,11 @@ class EditorPage {
     var sourceImageUrl: String = ""
     @State
     var resultImageUrl: String = ""
+    /// 远端结果地址（HTTPS），用于下载与历史；预览优先使用落盘后的 file://（参考 cangjie_dazuoye_coming-main 的稳定做法）
+    @State
+    var resultRemoteUrl: String = ""
+    @State
+    var genPreviewSeq: Int64 = 0
     @State
     var showResult: Bool = false
     @State
@@ -630,15 +636,30 @@ class EditorPage {
     @Builder
     func buildResultSection() {
         Column {
-            Text("结果").fontSize(18).fontWeight(FontWeight.Bold).fontColor(0xFF1D1D1F).margin(top: 24, bottom: 12)
+            Text("结果")
+                .fontSize(18)
+                .fontWeight(FontWeight.Bold)
+                .fontColor(0xFF1D1D1F)
+                .width(100.percent)
+                .textAlign(TextAlign.Center)
+                .margin(top: 24, bottom: 12)
 
             if (!this.resultImageUrl.isEmpty()) {
-                Image(this.resultImageUrl)
+                Column {
+                    Image(this.resultImageUrl)
+                        .width(100.percent)
+                        .height(440)
+                        .borderRadius(16)
+                        .objectFit(ImageFit.Contain)
+                        .interpolation(ImageInterpolation.High)
+                }
                     .width(100.percent)
-                    .height(280)
-                    .borderRadius(12)
-                    .objectFit(ImageFit.Contain)
-                    .interpolation(ImageInterpolation.High)
+                    .padding(10)
+                    .backgroundColor(0xFFFFFFFF)
+                    .borderRadius(18)
+                    .borderWidth(1)
+                    .borderColor(0xFFE5E5EA)
+                    .shadow(radius: 16.0, color: 0x14000000, offsetX: 0.0, offsetY: 6.0)
             }
 
             Row {
@@ -706,6 +727,90 @@ class EditorPage {
     func resetGenerateResult(): Unit {
         this.showResult = false
         this.resultImageUrl = ""
+        this.resultRemoteUrl = ""
+    }
+
+    func forgeDisplayUri(filesPath: String): String {
+        "file://${filesPath}"
+    }
+
+    func stripFileUriPath(uri: String): String {
+        if (uri.startsWith("file://")) {
+            uri[7..uri.size]
+        } else {
+            uri
+        }
+    }
+
+    func primaryResultRemote(r: ImageTaskResult): String {
+        if (!r.imageUrl.isEmpty()) {
+            r.imageUrl
+        } else {
+            r.thumbnailUrl
+        }
+    }
+
+    func historyCardTitleGenerate(): String {
+        if (this.currentLang == "zh") {
+            return "生成图片"
+        } else {
+            return "Generated image"
+        }
+    }
+
+    func historyCardTitleEdit(): String {
+        if (this.currentLang == "zh") {
+            return "编辑图片"
+        } else {
+            return "Edited image"
+        }
+    }
+
+    func applyGenerateRemoteFallback(r: ImageTaskResult): Unit {
+        let remote = this.primaryResultRemote(r)
+        this.resultRemoteUrl = remote
+        this.progress = 100
+        this.isProcessing = false
+        this.showResult = true
+        this.resultImageUrl = remote
+        this.taskMessage = "生成完成"
+        this.isTaskError = false
+        this.onCreditsChange(r.creditsRemaining)
+        imageForgeHistoryAppendRecord(this.historyCardTitleGenerate(), this.genPrompt, remote)
+    }
+
+    func finalizeGeneratePreview(r: ImageTaskResult, remote: String): Unit {
+        this.genPreviewSeq += 1
+        let fname = "ImageForge_gen_${this.genPreviewSeq}.png"
+        this.taskMessage = "正在载入预览…"
+        apiDownloadImageBytes(
+            remote,
+            {
+                bytes: Array<Byte> =>
+                    if (bytes.size == 0) {
+                        this.applyGenerateRemoteFallback(r)
+                        return
+                    }
+                    match (forgeTrySaveImageBytes(bytes, fname)) {
+                        case Some(path) =>
+                            this.progress = 100
+                            this.isProcessing = false
+                            this.showResult = true
+                            this.resultImageUrl = this.forgeDisplayUri(path)
+                            this.taskMessage = "生成完成"
+                            this.isTaskError = false
+                            this.onCreditsChange(r.creditsRemaining)
+                            imageForgeHistoryAppendRecord(
+                                this.historyCardTitleGenerate(), this.genPrompt, this.resultRemoteUrl)
+                        case None =>
+                            this.applyGenerateRemoteFallback(r)
+                    }
+            },
+            {
+                _: String =>
+                    this.applyGenerateRemoteFallback(r)
+            }
+        )
     }
 
     func applyPresetLabel(label: String): Unit {
@@ -804,6 +909,7 @@ class EditorPage {
         this.progress = 5
         this.showResult = false
         this.resultImageUrl = ""
+        this.resultRemoteUrl = ""
         this.taskMessage = "正在下载原图…"
         this.isTaskError = false
 
@@ -834,12 +940,17 @@ class EditorPage {
                                 this.progress = 100
                                 this.isProcessing = false
                                 this.showResult = true
-                                this.resultImageUrl = result.imageUrl
+                                this.resultRemoteUrl = this.primaryResultRemote(result)
+                                this.resultImageUrl = if (!result.imageUrl.isEmpty()) {
+                                    result.imageUrl
+                                } else {
+                                    result.thumbnailUrl
+                                }
                                 this.taskMessage = "编辑完成"
                                 this.isTaskError = false
                                 this.onCreditsChange(result.creditsRemaining)
-                                imageForgeHistoryAppend(
-                                    "编辑 · ${tpl} · ${fullPrompt} · ${result.imageUrl}"
+                                imageForgeHistoryAppendRecord(
+                                    this.historyCardTitleEdit(), fullPrompt, this.resultRemoteUrl
                                 )
                         },
                         {
@@ -848,6 +959,7 @@ class EditorPage {
                                 this.progress = 0
                                 this.showResult = false
                                 this.resultImageUrl = ""
+                                this.resultRemoteUrl = ""
                                 this.taskMessage = message
                                 this.isTaskError = true
                         }
@@ -864,31 +976,61 @@ class EditorPage {
     }
 
     func handleDownloadResult(): Unit {
-        if (this.resultImageUrl.isEmpty()) {
+        let fetchUrl = if (!this.resultRemoteUrl.isEmpty()) {
+            this.resultRemoteUrl
+        } else {
+            let u = this.resultImageUrl
+            if (u.startsWith("http://") || u.startsWith("https://")) {
+                u
+            } else {
+                ""
+            }
+        }
+        if (!fetchUrl.isEmpty()) {
+            this.taskMessage = "正在保存到应用目录…"
+            this.isTaskError = false
+            apiDownloadImageBytes(
+                fetchUrl,
+                {
+                    bytes: Array<Byte> =>
+                        let saved = forgeTrySaveImageBytes(bytes, "ImageForge_download.png")
+                        match (saved) {
+                            case Some(path) =>
+                                this.taskMessage = "已保存：${path}"
+                                this.isTaskError = false
+                            case None =>
+                                this.taskMessage = "保存失败：未配置文件目录或写入被拒"
+                                this.isTaskError = true
+                        }
+                },
+                {
+                    message: String =>
+                        this.taskMessage = message
+                        this.isTaskError = true
+                }
+            )
             return
         }
-        this.taskMessage = "正在保存到应用目录…"
+        let localPath = this.stripFileUriPath(this.resultImageUrl)
+        if (localPath.isEmpty()) {
+            return
+        }
+        this.taskMessage = "正在写入下载文件…"
         this.isTaskError = false
-        apiDownloadImageBytes(
-            this.resultImageUrl,
-            {
-                bytes: Array<Byte> =>
-                    let saved = forgeTrySaveImageBytes(bytes, "ImageForge_download.png")
-                    match (saved) {
-                        case Some(path) =>
-                            this.taskMessage = "已保存：${path}"
-                            this.isTaskError = false
-                        case None =>
-                            this.taskMessage = "保存失败：未配置文件目录或写入被拒"
-                            this.isTaskError = true
-                    }
-            },
-            {
-                message: String =>
-                    this.taskMessage = message
+        try {
+            let bytes = File.readFrom(localPath)
+            match (forgeTrySaveImageBytes(bytes, "ImageForge_download.png")) {
+                case Some(path) =>
+                    this.taskMessage = "已保存：${path}"
+                    this.isTaskError = false
+                case None =>
+                    this.taskMessage = "保存失败：未配置文件目录或写入被拒"
                     this.isTaskError = true
             }
-        )
+        } catch (_: Exception) {
+            this.taskMessage = "读取预览文件失败"
+            this.isTaskError = true
+        }
     }
 
     func handleGenerate() {
@@ -905,13 +1047,14 @@ class EditorPage {
         }
 
         this.isProcessing = true
-        this.progress = 0
+        this.progress = 8
         this.resultImageUrl = ""
+        this.resultRemoteUrl = ""
         this.showResult = false
-        this.taskMessage = "已连接生成流，准备推送进度…"
+        this.taskMessage = "已提交生成任务，等待服务端返回…"
         this.isTaskError = false
 
-        apiGenerateImageStream(
+        apiGenerateImage(
             this.accessCode,
             this.genPrompt,
             this.genWidth,
@@ -919,19 +1062,19 @@ class EditorPage {
             this.genSteps,
             this.genCfg,
             {
-                p: Int64 =>
-                    this.progress = p
-            },
-            {
                 result: ImageTaskResult =>
-                    this.progress = 100
-                    this.isProcessing = false
-                    this.showResult = true
-                    this.resultImageUrl = result.imageUrl
-                    this.taskMessage = "生成完成"
-                    this.isTaskError = false
-                    this.onCreditsChange(result.creditsRemaining)
-                    imageForgeHistoryAppend("文生图 · ${this.genPrompt} · ${result.imageUrl}")
+                    let remote = this.primaryResultRemote(result)
+                    if (remote.isEmpty()) {
+                        this.isProcessing = false
+                        this.progress = 0
+                        this.showResult = false
+                        this.taskMessage = "生成成功但未返回图片地址"
+                        this.isTaskError = true
+                        return
+                    }
+                    this.progress = 60
+                    this.resultRemoteUrl = remote
+                    this.finalizeGeneratePreview(result, remote)
             },
             {
                 message: String =>
@@ -939,6 +1082,7 @@ class EditorPage {
                     this.progress = 0
                     this.showResult = false
                     this.resultImageUrl = ""
+                    this.resultRemoteUrl = ""
                     this.taskMessage = message
                     this.isTaskError = true
             }
