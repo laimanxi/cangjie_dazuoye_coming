@@ -7,11 +7,11 @@
         "material": {
           "certpath": "C:\\Users\\lmx17\\.ohos\\config\\default_cangjie_dazuoye_try_Iltz16U5AvK4llKbpPmg28PiPQDNKD5bUuF7P_y_Fbs=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001BC255F08E656BEAD3648A3586C6A410834D1637BA03C61EE877D5D09BD76F17ED1025F15AC56D15",
+          "keyPassword": "0000001B7BEB74282C6F70BD331D7CB1FDB8E0EAD85110EE4FE2BD89B0AE15F23F6A71D761CE73F262E4EA",
           "profile": "C:\\Users\\lmx17\\.ohos\\config\\default_cangjie_dazuoye_try_Iltz16U5AvK4llKbpPmg28PiPQDNKD5bUuF7P_y_Fbs=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\lmx17\\.ohos\\config\\default_cangjie_dazuoye_try_Iltz16U5AvK4llKbpPmg28PiPQDNKD5bUuF7P_y_Fbs=.p12",
-          "storePassword": "0000001B7150CBE75080D4AD1F4E240753DF034852DC29BF1DDEDF042382DCF3A311F88D381D88BF527114"
+          "storePassword": "0000001B383977E65E5FF6FF670ECCBF2375172AB6C6086E5347A5ED0C44E771DE52074ABB79B08D28CEEB"
         }
       }
     ],
