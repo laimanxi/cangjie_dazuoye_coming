@@ -1,6 +1,7 @@
 package ohos_app_cangjie_entry
 
 import kit.NetworkKit.*
+import kit.ArkUI.*
 import ohos.base.*
 import ohos.business_exception.BusinessException
 import std.collection.*
@@ -10,8 +11,8 @@ let API_BASE_URL: String = "https://ptp.matrixlabs.cn" // cjlint-ignore !G.OTH.0
 let AUTH_API_PATH: String = "/api/auth"
 
 func runOnMainThread(task: () -> Unit): Unit {
-    spawn (UIThread) {
-        => task()
+    launch {
+        task()
     }
 }
 
