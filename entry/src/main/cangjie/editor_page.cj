@@ -2,25 +2,47 @@ package ohos_app_cangjie_entry
 
 import kit.ArkUI.*
 import ohos.arkui.state_macro_manage.*
+import std.convert.*
 
 @Component
 class EditorPage {
-    @Prop var accessCode: String
-    @Prop var currentLang: String
-    @State var currentMode: String = "edit"
-    @State var editMode: String = "style"
-    @State var promptText: String = ""
-    @State var negativePrompt: String = ""
-    @State var isProcessing: Bool = false
-    @State var progress: Int64 = 0
-    @State var hasImage: Bool = false
-    @State var resultImageUrl: String = ""
-    @State var showResult: Bool = false
-    @State var genPrompt: String = ""
-    @State var genWidth: Int64 = 1024
-    @State var genHeight: Int64 = 1024
-    @State var genSteps: Int64 = 4
-    @State var genCfg: Float64 = 1.0
+    @Prop
+    var accessCode: String
+    @Prop
+    var currentLang: String
+    var onCreditsChange: (Int64) -> Unit = {_: Int64 =>}
+    @State
+    var currentMode: String = "edit"
+    @State
+    var editMode: String = "style"
+    @State
+    var promptText: String = ""
+    @State
+    var negativePrompt: String = ""
+    @State
+    var isProcessing: Bool = false
+    @State
+    var progress: Int64 = 0
+    @State
+    var hasImage: Bool = false
+    @State
+    var resultImageUrl: String = ""
+    @State
+    var showResult: Bool = false
+    @State
+    var genPrompt: String = ""
+    @State
+    var genWidth: Int64 = 1024
+    @State
+    var genHeight: Int64 = 1024
+    @State
+    var genSteps: Int64 = 4
+    @State
+    var genCfg: Float64 = 1.0
+    @State
+    var taskMessage: String = ""
+    @State
+    var isTaskError: Bool = false
     var sceneLabels: Array<String> = ["随手自拍", "办公桌", "咖啡桌", "厨房", "卧室", "户外", "奢华", "人像", "自然"]
 
     func build() {
@@ -29,6 +51,10 @@ class EditorPage {
 
             Scroll() {
                 Column {
+                    if (!this.taskMessage.isEmpty()) {
+                        this.buildTaskMessage()
+                    }
+
                     if (this.currentMode == "edit") {
                         this.buildEditPage()
                     } else {
@@ -38,16 +64,9 @@ class EditorPage {
                     if (this.showResult) {
                         this.buildResultSection()
                     }
-                }
-                .width(100.percent)
-                .padding(left: 16, right: 16)
-            }
-            .layoutWeight(1)
-            .scrollBar(BarState.Off)
-        }
-        .width(100.percent)
-        .height(100.percent)
-        .backgroundColor(0xFFF2F2F7)
+                }.width(100.percent).padding(left: 16, right: 16)
+            }.layoutWeight(1).scrollBar(BarState.Off)
+        }.width(100.percent).height(100.percent).backgroundColor(0xFFF2F2F7)
     }
 
     @Builder
@@ -56,10 +75,10 @@ class EditorPage {
             this.buildModeButton("编辑图片", "edit")
             this.buildModeButton("生成图片", "generate")
         }
-        .width(100.percent)
-        .padding(left: 16, right: 16, top: 12, bottom: 12)
-        .justifyContent(FlexAlign.Center)
-        .backgroundColor(0xFFFFFFFF)
+            .width(100.percent)
+            .padding(left: 16, right: 16, top: 12, bottom: 12)
+            .justifyContent(FlexAlign.Center)
+            .backgroundColor(0xFFFFFFFF)
     }
 
     @Builder
@@ -67,13 +86,42 @@ class EditorPage {
         Text(label)
             .fontSize(14)
             .fontWeight(FontWeight.Medium)
-            .fontColor(if (this.currentMode == mode) { 0xFF007AFF } else { 0xFF86868B })
-            .padding(left: 20, right: 20, top: 10, bottom: 10)
-            .backgroundColor(if (this.currentMode == mode) { 0xFFFFFFFF } else { 0x00000000 })
-            .borderRadius(20)
-            .onClick({ _: ClickEvent =>
-                this.currentMode = mode
+            .fontColor(if (this.currentMode == mode) {
+                0xFF007AFF
+            } else {
+                0xFF86868B
             })
+            .padding(left: 20, right: 20, top: 10, bottom: 10)
+            .backgroundColor(if (this.currentMode == mode) {
+                0xFFFFFFFF
+            } else {
+                0x00000000
+            })
+            .borderRadius(20)
+            .onClick(
+                {
+                    _: ClickEvent =>
+                        this.currentMode = mode
+                        this.taskMessage = ""
+                        this.isTaskError = false
+                }
+            )
+    }
+
+    @Builder
+    func buildTaskMessage() {
+        Text(this.taskMessage)
+            .fontSize(13)
+            .fontColor(if (this.isTaskError) {
+                0xFFFF3B30
+            } else {
+                0xFF007AFF
+            })
+            .width(100.percent)
+            .padding(12)
+            .backgroundColor(0xFFFFFFFF)
+            .borderRadius(10)
+            .margin(top: 12, bottom: 4)
     }
 
     @Builder
@@ -87,11 +135,7 @@ class EditorPage {
 
             this.buildPresetChips()
 
-            Text("编辑指令")
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(0xFF1D1D1F)
-                .margin(top: 16, bottom: 8)
+            Text("编辑指令").fontSize(16).fontWeight(FontWeight.Medium).fontColor(0xFF1D1D1F).margin(top: 16, bottom: 8)
 
             TextArea(placeholder: "描述你想如何编辑图片...")
                 .height(120)
@@ -100,14 +144,11 @@ class EditorPage {
                 .borderRadius(12)
                 .padding(12)
                 .fontSize(14)
-                .onChange({ value: String =>
-                    this.promptText = value
+                .onChange({
+                    value: String => this.promptText = value
                 })
 
-            Text("排除内容（可选）")
-                .fontSize(14)
-                .fontColor(0xFF86868B)
-                .margin(top: 12, bottom: 6)
+            Text("排除内容（可选）").fontSize(14).fontColor(0xFF86868B).margin(top: 12, bottom: 6)
 
             TextInput(placeholder: "例如：多余手指、水印、文字")
                 .height(44)
@@ -116,8 +157,8 @@ class EditorPage {
                 .borderRadius(12)
                 .padding(left: 12, right: 12)
                 .fontSize(14)
-                .onChange({ value: String =>
-                    this.negativePrompt = value
+                .onChange({
+                    value: String => this.negativePrompt = value
                 })
 
             Text("将作为排除说明附加在提示词后发送给模型。")
@@ -129,20 +170,23 @@ class EditorPage {
                 .shape(ButtonType.Capsule)
                 .width(100.percent)
                 .height(48)
-                .backgroundColor(if (this.isProcessing) { 0xFF86868B } else { 0xFF007AFF })
+                .backgroundColor(if (this.isProcessing) {
+                    0xFF86868B
+                } else {
+                    0xFF007AFF
+                })
                 .fontColor(0xFFFFFFFF)
                 .fontSize(16)
                 .fontWeight(FontWeight.Medium)
                 .enabled(!this.isProcessing)
-                .onClick({ _: ClickEvent =>
-                    this.handleEditImage()
+                .onClick({
+                    _: ClickEvent => this.handleEditImage()
                 })
 
             if (this.isProcessing) {
                 this.buildProgressBar()
             }
-        }
-        .width(100.percent)
+        }.width(100.percent)
     }
 
     @Builder
@@ -151,9 +195,7 @@ class EditorPage {
             this.buildEditModeChip("风格化", "style")
             this.buildEditModeChip("高清增强", "upscale")
             this.buildEditModeChip("背景重绘", "background")
-        }
-        .width(100.percent)
-        .margin(top: 12, bottom: 8)
+        }.width(100.percent).margin(top: 12, bottom: 8)
     }
 
     @Builder
@@ -161,15 +203,27 @@ class EditorPage {
         Text(label)
             .fontSize(13)
             .fontWeight(FontWeight.Medium)
-            .fontColor(if (this.editMode == mode) { 0xFFFFFFFF } else { 0xFF86868B })
+            .fontColor(if (this.editMode == mode) {
+                0xFFFFFFFF
+            } else {
+                0xFF86868B
+            })
             .padding(left: 14, right: 14, top: 8, bottom: 8)
-            .backgroundColor(if (this.editMode == mode) { 0xFF007AFF } else { 0xFFFFFFFF })
+            .backgroundColor(if (this.editMode == mode) {
+                0xFF007AFF
+            } else {
+                0xFFFFFFFF
+            })
             .borderRadius(16)
             .borderWidth(1)
-            .borderColor(if (this.editMode == mode) { 0xFF007AFF } else { 0xFFE5E5EA })
+            .borderColor(if (this.editMode == mode) {
+                0xFF007AFF
+            } else {
+                0xFFE5E5EA
+            })
             .margin(right: 8)
-            .onClick({ _: ClickEvent =>
-                this.editMode = mode
+            .onClick({
+                _: ClickEvent => this.editMode = mode
             })
     }
 
@@ -192,36 +246,25 @@ class EditorPage {
         Column {
             if (!this.hasImage) {
                 Column {
-                    Text("+")
-                        .fontSize(40)
-                        .fontColor(0xFF86868B)
-                    Text("点击上传图片")
-                        .fontSize(14)
-                        .fontColor(0xFF86868B)
-                        .margin(top: 8)
-                    Text("JPG, PNG, WEBP · 最大 20MB")
-                        .fontSize(12)
-                        .fontColor(0xFFAEAEB2)
-                        .margin(top: 4)
+                    Text("+").fontSize(40).fontColor(0xFF86868B)
+                    Text("点击上传图片").fontSize(14).fontColor(0xFF86868B).margin(top: 8)
+                    Text("JPG, PNG, WEBP · 最大 20MB").fontSize(12).fontColor(0xFFAEAEB2).margin(top: 4)
                 }
-                .width(100.percent)
-                .height(200)
-                .justifyContent(FlexAlign.Center)
-                .alignItems(HorizontalAlign.Center)
-                .backgroundColor(0xFFFFFFFF)
-                .borderRadius(16)
-                .borderWidth(2)
-                .borderColor(0xFFE5E5EA)
-                .borderStyle(BorderStyle.Dashed)
-                .onClick({ _: ClickEvent =>
-                    this.hasImage = true
-                })
+                    .width(100.percent)
+                    .height(200)
+                    .justifyContent(FlexAlign.Center)
+                    .alignItems(HorizontalAlign.Center)
+                    .backgroundColor(0xFFFFFFFF)
+                    .borderRadius(16)
+                    .borderWidth(2)
+                    .borderColor(0xFFE5E5EA)
+                    .borderStyle(BorderStyle.Dashed)
+                    .onClick({
+                        _: ClickEvent => this.hasImage = true
+                    })
             } else {
                 Column {
-                    Text("已选择图片")
-                        .fontSize(14)
-                        .fontColor(0xFF34C759)
-                        .margin(bottom: 8)
+                    Text("已选择图片").fontSize(14).fontColor(0xFF34C759).margin(bottom: 8)
 
                     Button("移除")
                         .shape(ButtonType.Capsule)
@@ -229,16 +272,16 @@ class EditorPage {
                         .backgroundColor(0xFFFF3B30)
                         .fontColor(0xFFFFFFFF)
                         .fontSize(13)
-                        .onClick({ _: ClickEvent =>
-                            this.hasImage = false
+                        .onClick({
+                            _: ClickEvent => this.hasImage = false
                         })
                 }
-                .width(100.percent)
-                .height(200)
-                .justifyContent(FlexAlign.Center)
-                .alignItems(HorizontalAlign.Center)
-                .backgroundColor(0xFFFFFFFF)
-                .borderRadius(16)
+                    .width(100.percent)
+                    .height(200)
+                    .justifyContent(FlexAlign.Center)
+                    .alignItems(HorizontalAlign.Center)
+                    .backgroundColor(0xFFFFFFFF)
+                    .borderRadius(16)
             }
         }
     }
@@ -246,19 +289,14 @@ class EditorPage {
     @Builder
     func buildPresetChips() {
         Column {
-            Text("预设提示词")
-                .fontSize(14)
-                .fontColor(0xFF86868B)
-                .margin(top: 12, bottom: 8)
+            Text("预设提示词").fontSize(14).fontColor(0xFF86868B).margin(top: 12, bottom: 8)
 
             Row {
                 this.buildPresetButton("人像精修")
                 this.buildPresetButton("复古胶片")
                 this.buildPresetButton("证件照清爽")
             }
-        }
-        .width(100.percent)
-        .alignItems(HorizontalAlign.Start)
+        }.width(100.percent).alignItems(HorizontalAlign.Start)
     }
 
     @Builder
@@ -272,8 +310,8 @@ class EditorPage {
             .borderWidth(1)
             .borderColor(0xFFE5E5EA)
             .margin(right: 8)
-            .onClick({ _: ClickEvent =>
-                if (label == "人像精修") {
+            .onClick({
+                _: ClickEvent => if (label == "人像精修") {
                     this.promptText = "人像精修：均匀肤色、自然眼神光、轻微锐化，保持五官与姿态不变。"
                 } else if (label == "复古胶片") {
                     this.promptText = "复古胶片感：暖调褪色阴影、细腻颗粒、略降对比度，保持构图不变。"
@@ -286,11 +324,7 @@ class EditorPage {
     @Builder
     func buildGeneratePage() {
         Column {
-            Text("图片描述")
-                .fontSize(16)
-                .fontWeight(FontWeight.Medium)
-                .fontColor(0xFF1D1D1F)
-                .margin(top: 12, bottom: 8)
+            Text("图片描述").fontSize(16).fontWeight(FontWeight.Medium).fontColor(0xFF1D1D1F).margin(top: 12, bottom: 8)
 
             TextArea(placeholder: "描述你想生成的图片...")
                 .height(120)
@@ -299,8 +333,8 @@ class EditorPage {
                 .borderRadius(12)
                 .padding(12)
                 .fontSize(14)
-                .onChange({ value: String =>
-                    this.genPrompt = value
+                .onChange({
+                    value: String => this.genPrompt = value
                 })
 
             this.buildSceneChips()
@@ -311,34 +345,34 @@ class EditorPage {
                 .shape(ButtonType.Capsule)
                 .width(100.percent)
                 .height(48)
-                .backgroundColor(if (this.isProcessing) { 0xFF86868B } else { 0xFF007AFF })
+                .backgroundColor(if (this.isProcessing) {
+                    0xFF86868B
+                } else {
+                    0xFF007AFF
+                })
                 .fontColor(0xFFFFFFFF)
                 .fontSize(16)
                 .fontWeight(FontWeight.Medium)
                 .margin(top: 16)
                 .enabled(!this.isProcessing)
-                .onClick({ _: ClickEvent =>
-                    this.handleGenerate()
+                .onClick({
+                    _: ClickEvent => this.handleGenerate()
                 })
 
             if (this.isProcessing) {
                 this.buildProgressBar()
             }
-        }
-        .width(100.percent)
+        }.width(100.percent)
     }
 
     @Builder
     func buildSceneChips() {
         Column {
-            Text("场景预设")
-                .fontSize(14)
-                .fontColor(0xFF86868B)
-                .margin(top: 12, bottom: 8)
+            Text("场景预设").fontSize(14).fontColor(0xFF86868B).margin(top: 12, bottom: 8)
 
             Flex(wrap: FlexWrap.Wrap) {
-                ForEach(this.sceneLabels, itemGenerator: { scene: String, _: Int64 =>
-                    Text(scene)
+                ForEach(this.sceneLabels, itemGenerator: {
+                    scene: String, _: Int64 => Text(scene)
                         .fontSize(12)
                         .fontColor(0xFF86868B)
                         .padding(left: 12, right: 12, top: 6, bottom: 6)
@@ -347,24 +381,19 @@ class EditorPage {
                         .borderWidth(1)
                         .borderColor(0xFFE5E5EA)
                         .margin(right: 8, bottom: 8)
-                        .onClick({ _: ClickEvent =>
-                            this.genPrompt = scene
+                        .onClick({
+                            _: ClickEvent => this.genPrompt = scene
                         })
                 })
             }
-        }
-        .width(100.percent)
-        .alignItems(HorizontalAlign.Start)
+        }.width(100.percent).alignItems(HorizontalAlign.Start)
     }
 
     @Builder
     func buildGenerateParams() {
         Column {
             Row {
-                Text("宽度")
-                    .fontSize(14)
-                    .fontColor(0xFF1D1D1F)
-                    .width(60)
+                Text("宽度").fontSize(14).fontColor(0xFF1D1D1F).width(60)
                 TextInput(text: "${this.genWidth}")
                     .height(40)
                     .layoutWeight(1)
@@ -372,18 +401,15 @@ class EditorPage {
                     .borderRadius(8)
                     .padding(left: 12, right: 12)
                     .fontSize(14)
-                    .onChange({ value: String =>
-                        this.genWidth = 1024
+                    .onChange({
+                        value: String => if (let Some(v) <- Int64.tryParse(value.trimAscii()) && v > 0) {
+                            this.genWidth = v
+                        }
                     })
-            }
-            .width(100.percent)
-            .margin(top: 12)
+            }.width(100.percent).margin(top: 12)
 
             Row {
-                Text("高度")
-                    .fontSize(14)
-                    .fontColor(0xFF1D1D1F)
-                    .width(60)
+                Text("高度").fontSize(14).fontColor(0xFF1D1D1F).width(60)
                 TextInput(text: "${this.genHeight}")
                     .height(40)
                     .layoutWeight(1)
@@ -391,18 +417,15 @@ class EditorPage {
                     .borderRadius(8)
                     .padding(left: 12, right: 12)
                     .fontSize(14)
-                    .onChange({ value: String =>
-                        this.genHeight = 1024
+                    .onChange({
+                        value: String => if (let Some(v) <- Int64.tryParse(value.trimAscii()) && v > 0) {
+                            this.genHeight = v
+                        }
                     })
-            }
-            .width(100.percent)
-            .margin(top: 8)
+            }.width(100.percent).margin(top: 8)
 
             Row {
-                Text("步数")
-                    .fontSize(14)
-                    .fontColor(0xFF1D1D1F)
-                    .width(60)
+                Text("步数").fontSize(14).fontColor(0xFF1D1D1F).width(60)
                 TextInput(text: "${this.genSteps}")
                     .height(40)
                     .layoutWeight(1)
@@ -410,49 +433,38 @@ class EditorPage {
                     .borderRadius(8)
                     .padding(left: 12, right: 12)
                     .fontSize(14)
-                    .onChange({ value: String =>
-                        this.genSteps = 4
+                    .onChange({
+                        value: String => if (let Some(v) <- Int64.tryParse(value.trimAscii()) && v > 0) {
+                            this.genSteps = v
+                        }
                     })
-            }
-            .width(100.percent)
-            .margin(top: 8)
+            }.width(100.percent).margin(top: 8)
 
             Row {
-                Text("CFG")
-                    .fontSize(14)
-                    .fontColor(0xFF1D1D1F)
-                    .width(60)
-                TextInput(text: "1.0")
+                Text("CFG").fontSize(14).fontColor(0xFF1D1D1F).width(60)
+                TextInput(text: "${this.genCfg}")
                     .height(40)
                     .layoutWeight(1)
                     .backgroundColor(0xFFFFFFFF)
                     .borderRadius(8)
                     .padding(left: 12, right: 12)
                     .fontSize(14)
-                    .onChange({ value: String =>
-                        this.genCfg = 1.0
+                    .onChange({
+                        value: String => if (let Some(v) <- Float64.tryParse(value.trimAscii()) && v > 0.0) {
+                            this.genCfg = v
+                        }
                     })
-            }
-            .width(100.percent)
-            .margin(top: 8)
-        }
-        .width(100.percent)
+            }.width(100.percent).margin(top: 8)
+        }.width(100.percent)
     }
 
     @Builder
     func buildResultSection() {
         Column {
-            Text("结果")
-                .fontSize(18)
-                .fontWeight(FontWeight.Bold)
-                .fontColor(0xFF1D1D1F)
-                .margin(top: 24, bottom: 12)
+            Text("结果").fontSize(18).fontWeight(FontWeight.Bold).fontColor(0xFF1D1D1F).margin(top: 24, bottom: 12)
 
             if (!this.resultImageUrl.isEmpty()) {
-                Image(this.resultImageUrl)
-                    .width(100.percent)
-                    .borderRadius(12)
-                    .objectFit(ImageFit.Contain)
+                Image(this.resultImageUrl).width(100.percent).borderRadius(12).objectFit(ImageFit.Contain)
             }
 
             Row {
@@ -474,31 +486,24 @@ class EditorPage {
                     .borderWidth(1)
                     .borderColor(0xFFE5E5EA)
                     .layoutWeight(1)
-                    .onClick({ _: ClickEvent =>
-                        this.showResult = false
-                        this.resultImageUrl = ""
-                    })
-            }
-            .width(100.percent)
-            .margin(top: 16, bottom: 24)
-        }
-        .width(100.percent)
+                    .onClick(
+                        {
+                            _: ClickEvent =>
+                                this.showResult = false
+                                this.resultImageUrl = ""
+                        }
+                    )
+            }.width(100.percent).margin(top: 16, bottom: 24)
+        }.width(100.percent)
     }
 
     @Builder
     func buildProgressBar() {
         Column {
-            Progress(value: Float64(this.progress), total: 100.0)
-                .width(100.percent)
-                .margin(top: 12)
+            Progress(value: Float64(this.progress), total: 100.0).width(100.percent).margin(top: 12)
 
-            Text("${this.progress}%")
-                .fontSize(14)
-                .fontColor(0xFF007AFF)
-                .margin(top: 4)
-        }
-        .width(100.percent)
-        .alignItems(HorizontalAlign.Center)
+            Text("${this.progress}%").fontSize(14).fontColor(0xFF007AFF).margin(top: 4)
+        }.width(100.percent).alignItems(HorizontalAlign.Center)
     }
 
     func getEditModeBannerText(): String {
@@ -539,26 +544,65 @@ class EditorPage {
 
     func handleEditImage() {
         if (this.promptText.isEmpty()) {
+            this.taskMessage = "请输入编辑指令"
+            this.isTaskError = true
             return
         }
-        this.isProcessing = true
-        this.progress = 0
-        this.simulateProgress()
+        if (!this.hasImage) {
+            this.taskMessage = "请先选择图片。当前版本已预留 /api/edit，下一步接入系统文件选择器。"
+            this.isTaskError = true
+            return
+        }
+        this.taskMessage = "图片编辑接口已预留，待接入文件选择器后调用 /api/edit。"
+        this.isTaskError = false
     }
 
     func handleGenerate() {
+        this.genPrompt = this.genPrompt.trimAscii()
         if (this.genPrompt.isEmpty()) {
+            this.taskMessage = "请输入图片描述"
+            this.isTaskError = true
             return
         }
-        this.isProcessing = true
-        this.progress = 0
-        this.simulateProgress()
-    }
+        if (this.accessCode.isEmpty()) {
+            this.taskMessage = "访问码为空，请重新登录"
+            this.isTaskError = true
+            return
+        }
 
-    func simulateProgress() {
-        this.progress = 100
-        this.isProcessing = false
-        this.showResult = true
+        this.isProcessing = true
+        this.progress = 8
         this.resultImageUrl = ""
+        this.showResult = false
+        this.taskMessage = "已提交生成任务，等待服务端返回..."
+        this.isTaskError = false
+
+        apiGenerateImage(
+            this.accessCode,
+            this.genPrompt,
+            this.genWidth,
+            this.genHeight,
+            this.genSteps,
+            this.genCfg,
+            {
+                result: ImageTaskResult =>
+                    this.progress = 100
+                    this.isProcessing = false
+                    this.showResult = true
+                    this.resultImageUrl = result.imageUrl
+                    this.taskMessage = "生成完成"
+                    this.isTaskError = false
+                    this.onCreditsChange(result.creditsRemaining)
+            },
+            {
+                message: String =>
+                    this.progress = 0
+                    this.isProcessing = false
+                    this.showResult = false
+                    this.resultImageUrl = ""
+                    this.taskMessage = message
+                    this.isTaskError = true
+            }
+        )
     }
 }

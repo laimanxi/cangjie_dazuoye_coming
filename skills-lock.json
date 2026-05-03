@@ -17,31 +17,39 @@
     },
     "cangjie-lang-features": {
       "source": "Cangjie-SIG/CangjieSkills",
-      "ref": "cangjie-harmonyos-cbgSR",
       "sourceType": "git",
       "skillPath": ".agents/skills/cangjie-lang-features/SKILL.md",
       "computedHash": "d407df6255c6cc749c2f2d0e88efba7903568b719e5b06af384c7e0b64c0ccfe"
     },
     "cangjie-original-docs": {
       "source": "Cangjie-SIG/CangjieSkills",
-      "ref": "cangjie-harmonyos-cbgSR",
       "sourceType": "git",
       "skillPath": ".agents/skills/cangjie-original-docs/SKILL.md",
       "computedHash": "de0d62494aa747891c4756dddd6cc74d05d02b7030fd0d4dc5254ece39951edb"
     },
+    "cangjie-regulations": {
+      "source": "Cangjie-SIG/CangjieSkills",
+      "sourceType": "git",
+      "skillPath": ".agents/skills/cangjie-regulations/SKILL.md",
+      "computedHash": "9771b6f4785a7e3131c59342815ca229e2fb6a0011183161759bae00f0fa9da9"
+    },
     "cangjie-std": {
       "source": "Cangjie-SIG/CangjieSkills",
-      "ref": "cangjie-harmonyos-cbgSR",
       "sourceType": "git",
       "skillPath": ".agents/skills/cangjie-std/SKILL.md",
       "computedHash": "f4527ca07ec45b4c697f30ce97ed33d32baab6f31cc24b330e4d3f438d9f8f62"
     },
     "cangjie-stdx": {
       "source": "Cangjie-SIG/CangjieSkills",
-      "ref": "cangjie-harmonyos-cbgSR",
       "sourceType": "git",
       "skillPath": ".agents/skills/cangjie-stdx/SKILL.md",
       "computedHash": "5be8cf407f1c4a2585e3a41f024474ff101bddfc0c5a7244e14d17655da4e33d"
+    },
+    "cangjie-toolchains": {
+      "source": "Cangjie-SIG/CangjieSkills",
+      "sourceType": "git",
+      "skillPath": ".agents/skills/cangjie-toolchains/SKILL.md",
+      "computedHash": "aad6be27b8210dc28089101e823c93a836c562b9658d0fca657de140ecf67056"
     },
     "harmonyos-app-agent-development": {
       "source": "Cangjie-SIG/CangjieSkills",
